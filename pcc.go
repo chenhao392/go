@@ -1,40 +1,49 @@
 package main
-import ("github.com/gonum/matrix/mat64"
+
+import (
 	"bufio"
-	"fmt"
+	"errors"
 	"flag"
+	"fmt"
+	"os"
+	"strconv"
 	"strings"
-	)
 
+	"github.com/gonum/floats"
+	"github.com/gonum/matrix/mat64"
+)
 
-func main(){
-	var inFile *string=flag("i","inMatrix.txt","tab delimited matrix")
-	data := raedFile(inFile)
-	//fmt.print(data)
+type fm struct {
+	mat64.Matrix
 }
-func readFile(inFile string)(data [][]float64,error){
+
+func readFile(inFile string) (data [][]float64, err error) {
 	file, err := os.Open(inFile)
 	if err != nil {
 		return
 	}
 	defer file.Close()
-	br :=bufio.NewReader(file)
-	data = [][]float64
-	for{
-		line,isPrefix,err1 := br.ReadLine()
-		if err1 != nil{
+	br := bufio.NewReader(file)
+	data = make([][]float64, 0)
+	for {
+		line, isPrefix, err1 := br.ReadLine()
+		if err1 != nil {
 			break
 		}
-		if isPrefix{
+		if isPrefix {
 			return
 		}
-		str=string(line)
-		elements :=strings.Split(str,"\t")
-		data=append(data,elements)
+		str := string(line)
+		elements := strings.Split(str, "\t")
+		var e2 = []float64{}
+		for _, i := range elements {
+			j, _ := strconv.ParseFloat(i, 64)
+			e2 = append(e2, j)
+		}
+		data = append(data, e2)
 	}
-	return data
+	return data, nil
 }
-
 
 // input: 2D array data in float64
 //output: pointer to * mat64.Dense to a  struc Dense
@@ -43,7 +52,7 @@ func readFile(inFile string)(data [][]float64,error){
 // 	mat blas64.General
 //  	capRows, capCols int
 //}
-func cov(data ...[]float64) (*mat64.Dense, error) {
+func cov(data [][]float64) (covmat2 *mat64.Dense, err error) {
 	nSets := len(data)
 	if nSets == 0 {
 		return mat64.NewDense(0, 0, nil), nil
@@ -74,5 +83,21 @@ func cov(data ...[]float64) (*mat64.Dense, error) {
 			covmat.Set(j, i, cv)
 		}
 	}
-	return covmat
+	return covmat, nil
+}
+
+func (m fm) Format(fs fmt.State, c rune) {
+	if c == 'v' && fs.Flag('#') {
+		fmt.Fprintf(fs, "%#v", m.Matrix)
+		return
+	}
+	mat64.Format(m.Matrix, 0, '.', fs, c)
+}
+
+func main() {
+	var inFile *string = flag.String("i", "test.txt", "tab delimited matrix")
+	file := *inFile
+	data, _ := readFile(file)
+	data2, _ := cov(data)
+	fmt.Printf("v' =\n%v\n", fm{data2})
 }
