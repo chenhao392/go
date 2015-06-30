@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"errors"
 	"flag"
 	"fmt"
 	"math"
@@ -122,47 +121,6 @@ func readFile(inFile string, rowName bool) (dataR *mat64.Dense, rName []string, 
 	return data, rName, nil
 }
 
-// input: 2D array data in float64
-//output: pointer to * mat64.Dense to a  struc Dense
-//Dense is a dense matrix representation.
-//type Dense struct {
-// 	mat blas64.General
-//  	capRows, capCols int
-//}
-func cov(data [][]float64) (covmat2 *mat64.Dense, err error) {
-	nSets := len(data)
-	if nSets == 0 {
-		return mat64.NewDense(0, 0, nil), nil
-	}
-	nData := len(data[0])
-	for i := range data {
-		if len(data[i]) != nData {
-			return nil, errors.New("cov: datasets have unequal size")
-		}
-	}
-	//new Dense struc with row and columns defined as nSets, nil is for empty mat
-	covmat := mat64.NewDense(nSets, nSets, nil)
-	//slice function make to generate an array slice with length nSets
-	means := make([]float64, nSets)
-	for i := range means {
-		means[i] = floats.Sum(data[i]) / float64(nData)
-	}
-	for i := 0; i < nSets; i++ {
-		for j := i; j < nSets; j++ {
-			var cv float64
-			meanI := means[i]
-			meanJ := means[j]
-			invData := 1 / float64(nData-1)
-			for k, val := range data[i] {
-				cv += invData * (val - meanI) * (data[j][k] - meanJ)
-			}
-			covmat.Set(i, j, cv)
-			covmat.Set(j, i, cv)
-		}
-	}
-	return covmat, nil
-}
-
 //Multiple threads PCC
 func paraCov(data *mat64.Dense, goro int) (covmat *mat64.Dense, err error) {
 	nSets, nData := data.Dims()
@@ -187,7 +145,6 @@ func paraCov(data *mat64.Dense, goro int) (covmat *mat64.Dense, err error) {
 	vs := make([]float64, nSets)
 	for i := range means {
 		means[i] = floats.Sum(data.Row(nil, i)) / float64(nData)
-		//fmt.Println(means[i])
 		var element float64
 		for j, _ := range data.Row(nil, i) {
 			data.Set(i, j, data.At(i, j)-means[i])
@@ -200,34 +157,24 @@ func paraCov(data *mat64.Dense, goro int) (covmat *mat64.Dense, err error) {
 	quit := make(chan bool)
 
 	singlePCC := func() {
-		//fmt.Println("2")
 		for {
 			select {
 			case element := <-in:
-				//var cv float64
+
 				i := element.I()
 				j := element.J()
-				//meanI := means[i]
-				//meanJ := means[j]
-				//invData := 1 / float64(nData-1)
 				var cv float64
+
 				for k, val := range data.Row(nil, i) {
-					//cv += invData * (val - meanI) * (data.At(j, k) - meanJ)
-					//fmt.Println(i, j, k, val)
 					cv += data.At(j, k) * val
-					//s1 += data.At(j, k) * data.At(j, k)
-					//s2 += val * val
 				}
-				//fmt.Println(vs[i])
+
 				cv = cv / (vs[i] * vs[j])
 				covmat.Set(i, j, cv)
 				covmat.Set(j, i, cv)
 
 			case <-quit:
 				return
-				//default:
-				//	fmt.Println("Wrong!")
-				//	return
 			}
 		}
 	}
@@ -247,21 +194,11 @@ func paraCov(data *mat64.Dense, goro int) (covmat *mat64.Dense, err error) {
 	return covmat, nil
 }
 
-func (m fm) Format(fs fmt.State, c rune) {
-	if c == 'v' && fs.Flag('#') {
-		fmt.Fprintf(fs, "%#v", m.Matrix)
-		return
-	}
-	mat64.Format(m.Matrix, 0, '.', fs, c)
-}
-
 func main() {
 	var inFile *string = flag.String("i", "test.txt", "tab delimited matrix")
 	var inThreads *int = flag.Int("p", 1, "number of threads")
 	flag.Parse()
 	data, rName, _ := readFile(*inFile, true)
-	//fmt.Println(data.At(0, 0))
-	//return
 	data2, _ := paraCov(data, *inThreads)
 	_, nCol := data2.Caps()
 	for i := range rName {
