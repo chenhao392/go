@@ -183,13 +183,17 @@ func paraCov(data *mat64.Dense, goro int) (covmat *mat64.Dense, err error) {
 
 	covmat = mat64.NewDense(nSets, nSets, nil)
 	means := make([]float64, nSets)
+	//var sqrt
+	vs := make([]float64, nSets)
 	for i := range means {
 		means[i] = floats.Sum(data.Row(nil, i)) / float64(nData)
 		//fmt.Println(means[i])
+		var element float64
 		for j, _ := range data.Row(nil, i) {
 			data.Set(i, j, data.At(i, j)-means[i])
-			//fmt.Println(data.At(i, j))
+			element += data.At(i, j) * data.At(i, j)
 		}
+		vs[i] = math.Sqrt(element)
 	}
 
 	in := make(chan coor)
@@ -206,19 +210,16 @@ func paraCov(data *mat64.Dense, goro int) (covmat *mat64.Dense, err error) {
 				//meanI := means[i]
 				//meanJ := means[j]
 				//invData := 1 / float64(nData-1)
-				var (
-					cv float64
-					s1 float64
-					s2 float64
-				)
+				var cv float64
 				for k, val := range data.Row(nil, i) {
 					//cv += invData * (val - meanI) * (data.At(j, k) - meanJ)
 					//fmt.Println(i, j, k, val)
 					cv += data.At(j, k) * val
-					s1 += data.At(j, k) * data.At(j, k)
-					s2 += val * val
+					//s1 += data.At(j, k) * data.At(j, k)
+					//s2 += val * val
 				}
-				cv = cv / (math.Sqrt(s1) * math.Sqrt(s2))
+				//fmt.Println(vs[i])
+				cv = cv / (vs[i] * vs[j])
 				covmat.Set(i, j, cv)
 				covmat.Set(j, i, cv)
 
