@@ -19,23 +19,23 @@ type fm struct {
 }
 
 type coor struct {
-	i int
-	j int
+	i [100]int
+	j [100]int
 }
 
-func (f *coor) SetI(i int) {
+func (f *coor) SetI(i [100]int) {
 	f.i = i
 }
 
-func (f coor) I() int {
+func (f coor) I() [100]int {
 	return f.i
 }
 
-func (f *coor) SetJ(j int) {
+func (f *coor) SetJ(j [100]int) {
 	f.j = j
 }
 
-func (f coor) J() int {
+func (f coor) J() [100]int {
 	return f.j
 }
 
@@ -128,17 +128,39 @@ func paraCov(data *mat64.Dense, goro int) (covmat *mat64.Dense, err error) {
 		return mat64.NewDense(0, 0, nil), nil
 	}
 	runtime.GOMAXPROCS(64)
-	c := make([]coor, nSets*nSets)
+	c := make([]coor, 1)
+
+	element := coor{}
+	var iArr [100]int
+	var jArr [100]int
+	k := 0
 
 	for i := 0; i < nSets; i++ {
 		for j := i; j < nSets; j++ {
-			element := coor{}
-			element.SetI(i)
-			element.SetJ(j)
-			c = append(c, element)
+			if k <= 99 {
+				iArr[k] = i
+				jArr[k] = j
+			} else {
+				element.SetI(iArr)
+				element.SetJ(jArr)
+				c = append(c, element)
+				//fmt.Println(element, "set")
+				element = coor{}
+				//iArr = nil
+				//jArr = nil
+				k = 0
+				iArr[k] = i
+				jArr[k] = j
+			}
+			k++
+			//fmt.Println(i, j, k, " gen")
 		}
 	}
-
+	//if k >1 {
+	element.SetI(iArr)
+	element.SetJ(jArr)
+	c = append(c, element)
+	//}
 	covmat = mat64.NewDense(nSets, nSets, nil)
 	means := make([]float64, nSets)
 	//var sqrt
@@ -161,18 +183,23 @@ func paraCov(data *mat64.Dense, goro int) (covmat *mat64.Dense, err error) {
 			select {
 			case element := <-in:
 
-				i := element.I()
-				j := element.J()
-				var cv float64
+				iArr := element.I()
+				jArr := element.J()
 
-				for k, val := range data.Row(nil, i) {
-					cv += data.At(j, k) * val
+				for m := 0; m < len(iArr); m++ {
+					i := iArr[m]
+					j := jArr[m]
+					var cv float64
+					for k, val := range data.Row(nil, i) {
+						cv += data.At(j, k) * val
+					}
+
+					cv = cv / (vs[i] * vs[j])
+					if (i == 0 && j == 0 && covmat.At(0, 0) == 0.0) || (i+j) > 0 {
+						covmat.Set(i, j, cv)
+						covmat.Set(j, i, cv)
+					}
 				}
-
-				cv = cv / (vs[i] * vs[j])
-				covmat.Set(i, j, cv)
-				covmat.Set(j, i, cv)
-
 			case <-quit:
 				return
 			}
@@ -182,7 +209,7 @@ func paraCov(data *mat64.Dense, goro int) (covmat *mat64.Dense, err error) {
 	for i := 0; i < goro; i++ {
 		go singlePCC()
 	}
-
+	//fmt.Println("length: ", len(c))
 	for i := 0; i < len(c); i++ {
 		in <- c[i]
 	}
