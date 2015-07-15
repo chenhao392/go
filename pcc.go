@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gonum/floats"
 	"github.com/gonum/matrix/mat64"
@@ -127,7 +128,7 @@ func paraCov(data *mat64.Dense, goro int) (covmat *mat64.Dense, err error) {
 	if nSets == 0 {
 		return mat64.NewDense(0, 0, nil), nil
 	}
-	runtime.GOMAXPROCS(64)
+	runtime.GOMAXPROCS(goro)
 	c := make([]coor, 1)
 
 	element := coor{}
@@ -175,8 +176,9 @@ func paraCov(data *mat64.Dense, goro int) (covmat *mat64.Dense, err error) {
 		vs[i] = math.Sqrt(element)
 	}
 
-	in := make(chan coor)
-	quit := make(chan bool)
+	var wg sync.WaitGroup
+	in := make(chan coor, goro*4)
+	//quit := make(chan bool, goro)
 
 	singlePCC := func() {
 		for {
@@ -200,12 +202,14 @@ func paraCov(data *mat64.Dense, goro int) (covmat *mat64.Dense, err error) {
 						covmat.Set(j, i, cv)
 					}
 				}
-			case <-quit:
-				return
+				wg.Done()
+				//case <-quit:
+				//	return
 			}
 		}
 	}
 
+	wg.Add(len(c))
 	for i := 0; i < goro; i++ {
 		go singlePCC()
 	}
@@ -213,10 +217,10 @@ func paraCov(data *mat64.Dense, goro int) (covmat *mat64.Dense, err error) {
 	for i := 0; i < len(c); i++ {
 		in <- c[i]
 	}
-
-	for i := 0; i < goro; i++ {
-		quit <- true
-	}
+	wg.Wait()
+	//for i := 0; i < goro; i++ {
+	//	quit <- true
+	//}
 
 	return covmat, nil
 }
@@ -231,7 +235,7 @@ func main() {
 	for i := range rName {
 		fmt.Printf("%v", rName[i])
 		for j := 0; j < nCol; j++ {
-			fmt.Printf("\t%1.2f", data2.At(i, j))
+			fmt.Printf("\t%1.6f", data2.At(i, j))
 		}
 		fmt.Printf("\n")
 	}
