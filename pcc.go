@@ -138,8 +138,14 @@ func paraCov(data [][]float64) (covmat2 *mat64.Dense, err error) {
 		means[i] = floats.Sum(data[i]) / float64(nData)
 	}
 
+<<<<<<< master
 	in := make(chan coor)
 	quit := make(chan bool)
+=======
+	var wg sync.WaitGroup
+	in := make(chan coor, goro*40)
+	//quit := make(chan bool, goro)
+>>>>>>> local
 
 	singlePCC := func() {
 		for {
